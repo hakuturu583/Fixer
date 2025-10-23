@@ -1,0 +1,11 @@
+*/.ipynb/*\noutput/
+base_model/weights/*
+.ipynb_checkpoints/*
+*/.ipynb_checkpoints/*
+*/*/.ipynb_checkpoints/*
+*/*/*/.ipynb_checkpoints/*
+*/*/*/*/.ipynb_checkpoints/*
+__pycache__/
+*/__pycache__/
+models/*
+output/*
