@@ -30,24 +30,16 @@ def parse_args() -> argparse.Namespace:
     # io
     p.add_argument("--outdir", type=str, required=True)
     p.add_argument("--name", type=str, default="fixer")
-    # shape/dtype/device
+    # shape/device
     p.add_argument("--height", type=int, default=1024)
     p.add_argument("--width", type=int, default=576)
-    p.add_argument("--dtype", type=str, default="fp16", choices=["fp32", "fp16", "bf16"])
     p.add_argument("--device", type=str, default=None, help="e.g., cuda, cuda:0, cpu")
     # warmup runs
     p.add_argument("--warmup-iters", type=int, default=5)
     return p.parse_args()
 
 
-def str_to_dtype(s: str) -> torch.dtype:
-    if s == "fp32":
-        return torch.float32
-    if s == "fp16":
-        return torch.float16
-    if s == "bf16":
-        return torch.bfloat16
-    raise ValueError(f"Unsupported dtype: {s}")
+FP32_DTYPE = torch.float32
 
 
 class _FixerForward(nn.Module):
@@ -111,7 +103,7 @@ def main():
     os.makedirs(args.outdir, exist_ok=True)
 
     device = select_device(args.device)
-    dtype = str_to_dtype(args.dtype)
+    dtype = FP32_DTYPE
 
     # 1) Build core model (loads UNet, VAE, condition, etc.)
     core = build_core(args.model, args.timestep, args.vae_skip_connection, device, dtype)
