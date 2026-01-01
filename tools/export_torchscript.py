@@ -80,6 +80,11 @@ def build_core(pretrained_path: str, timestep: int, vae_skip_connection: bool,
             setattr(core.vae, "dtype", dtype)
     except Exception:
         pass
+    # Ensure sigma_data uses the same dtype/device as the VAE/UNet to avoid upcasting
+    try:
+        core.sigma_data = torch.as_tensor(core.sigma_data, dtype=dtype, device=device)
+    except Exception:
+        pass
     return core
 
 
