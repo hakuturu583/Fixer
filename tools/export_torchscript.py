@@ -65,14 +65,13 @@ def build_core(pretrained_path: str, timestep: int, vae_skip_connection: bool,
     core.set_eval()
     # Keep UNet in FP32 for stable tracing
     core.unet.to(device=device, dtype=dtype)
-    # Move VAE to device but preserve its native dtype (often BF16 inside Cosmos)
-    core.vae.to(device=device)
-    # Make sure the tokenizer's `dtype` attribute matches its parameter dtype
+    # Move VAE to device and cast to BF16 to match Cosmos tokenizer expectations
+    core.vae.to(device=device, dtype=torch.bfloat16)
+    # Ensure the tokenizer's `dtype` attribute is BF16 so it casts inputs consistently
     try:
-        vae_param = next(core.vae.parameters())
         if hasattr(core.vae, "dtype"):
-            setattr(core.vae, "dtype", vae_param.dtype)
-    except StopIteration:
+            setattr(core.vae, "dtype", torch.bfloat16)
+    except Exception:
         pass
     # Ensure sigma_data uses FP32 on the correct device to upcast latents for UNet
     try:
