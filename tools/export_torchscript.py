@@ -4,9 +4,8 @@ import argparse
 from pathlib import Path
 
 import torch
-from torch import nn
 
-# Ensure we can import from src/ when running this script from tools/
+# Make src/ importable when running from tools/
 _ROOT = Path(__file__).resolve().parents[1]
 _SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
@@ -18,118 +17,63 @@ from pix2pix_turbo_nocond_cosmos_base_faster_tokenizer import Pix2Pix_Turbo
 def select_device(device_str: str | None) -> torch.device:
     if device_str is not None:
         return torch.device(device_str)
+    # Pix2Pix_Turbo internally moves modules to CUDA; prefer CUDA when available
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser("Export Fixer to TorchScript (trace)")
-    # model
-    p.add_argument("--model", type=str, required=True, help="path to pretrained Fixer checkpoint (.pkl)")
-    p.add_argument("--timestep", type=int, default=250)
-    p.add_argument("--vae-skip-connection", action="store_true")
-    # io
-    p.add_argument("--outdir", type=str, required=True)
-    p.add_argument("--name", type=str, default="fixer")
-    # shape/device
+    p = argparse.ArgumentParser("Export Fixer (end-to-end) to TorchScript via tracing")
+    # Model config (fixed timestep acceptable)
+    p.add_argument("--model", type=str, required=True, help="path to pretrained checkpoint (.pkl)")
+    p.add_argument("--timestep", type=int, default=400, help="fixed diffusion timestep")
+    p.add_argument("--vae-skip-connection", action="store_true", help="enable VAE skip connection")
+    # IO
+    p.add_argument("--out", type=str, required=True, help="output .ts path")
+    # Shapes / device
     p.add_argument("--height", type=int, default=1024)
     p.add_argument("--width", type=int, default=576)
-    p.add_argument("--device", type=str, default=None, help="e.g., cuda, cuda:0, cpu")
-    # warmup runs
-    p.add_argument("--warmup-iters", type=int, default=5)
+    p.add_argument("--device", type=str, default=None, help="e.g., cuda, cuda:0")
+    # Warmup
+    p.add_argument("--warmup-iters", type=int, default=1)
     return p.parse_args()
-
-
-FP32_DTYPE = torch.float32
-
-
-class _FixerForward(nn.Module):
-    """Thin wrapper around Pix2Pix_Turbo.forward for tracing end-to-end."""
-
-    def __init__(self, core: Pix2Pix_Turbo):
-        super().__init__()
-        self.core = core
-
-    @torch.no_grad()
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.core(x)
-
-
-def build_core(pretrained_path: str, timestep: int, vae_skip_connection: bool,
-               device: torch.device, dtype: torch.dtype) -> Pix2Pix_Turbo:
-    core = Pix2Pix_Turbo(
-        pretrained_path=pretrained_path,
-        timestep=timestep,
-        vae_skip_connection=vae_skip_connection,
-        batch_size=1,
-    )
-    core.set_eval()
-    # Keep UNet in FP32 for stable tracing
-    core.unet.to(device=device, dtype=dtype)
-    # Ensure pipeline modules do not cast to BF16 by overriding any `precision` attributes
-    def _force_precision_fp32(mod: torch.nn.Module):
-        for m in mod.modules():
-            if hasattr(m, "precision"):
-                try:
-                    setattr(m, "precision", torch.float32)
-                except Exception:
-                    pass
-    _force_precision_fp32(core.unet)
-    # Move VAE to device and cast to BF16 to match Cosmos tokenizer expectations
-    core.vae.to(device=device, dtype=torch.bfloat16)
-    # Ensure the tokenizer's `dtype` attribute is BF16 so it casts inputs consistently
-    try:
-        if hasattr(core.vae, "dtype"):
-            setattr(core.vae, "dtype", torch.bfloat16)
-    except Exception:
-        pass
-    # Ensure sigma_data uses FP32 on the correct device to upcast latents for UNet
-    try:
-        core.sigma_data = torch.as_tensor(core.sigma_data, dtype=dtype, device=device)
-    except Exception:
-        pass
-    return core
-
-
-def dummy_input(h: int, w: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-    return torch.randn(1, 3, h, w, device=device, dtype=dtype)
-
-
-def trace_and_save(module: nn.Module, example_inputs, out_path: str, warmup_iters: int = 5):
-    module.eval()
-    with torch.no_grad():
-        # light warmup
-        for _ in range(max(0, warmup_iters)):
-            if isinstance(example_inputs, (tuple, list)):
-                module(*example_inputs)
-            else:
-                module(example_inputs)
-        # trace
-        traced = torch.jit.trace(module, example_inputs, strict=False)
-        torch.jit.save(traced, out_path)
 
 
 def main():
     args = parse_args()
-    os.makedirs(args.outdir, exist_ok=True)
+    out_dir = os.path.dirname(args.out)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     device = select_device(args.device)
-    dtype = FP32_DTYPE
 
-    # 1) Build core model (loads UNet, VAE, condition, etc.)
-    core = build_core(args.model, args.timestep, args.vae_skip_connection, device, dtype)
-    # Enforce FP32 execution path inside forward for tracing
+    # Build core model with fixed settings; batch_size is 1 for tracing
+    model = Pix2Pix_Turbo(
+        pretrained_path=args.model,
+        timestep=args.timestep,
+        vae_skip_connection=args.vae_skip_connection,
+        batch_size=1,
+    )
+    model.set_eval()
+    # Stabilize tracing by forcing FP32 path inside forward
     try:
-        core.force_fp32_for_export = True
+        setattr(model, "force_fp32_for_export", True)
     except Exception:
         pass
 
-    # 2) End-to-end export (Fixer) — always export
-    fixer_wrap = _FixerForward(core)
-    ex = dummy_input(args.height, args.width, device, dtype)
-    out_path = os.path.join(args.outdir, f"{args.name}.ts")
-    trace_and_save(fixer_wrap, ex, out_path, warmup_iters=args.warmup_iters)
-    print(f"Saved: {out_path}")
+    # Dummy input (FP32) on the chosen device
+    x = torch.randn(1, 3, args.height, args.width, device=device, dtype=torch.float32)
+
+    # Light warmup and trace
+    model.eval()
+    with torch.no_grad():
+        for _ in range(max(0, args.warmup_iters)):
+            model(x)
+        traced = torch.jit.trace(model, x, strict=False)
+        torch.jit.save(traced, args.out)
+
+    print(f"Saved TorchScript: {args.out}")
 
 
 if __name__ == "__main__":
     main()
+

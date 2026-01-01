@@ -134,7 +134,7 @@ Include the flag ```--pretrained_path /path/to/pretrained_fixer.pkl``` to initia
 
 ## TorchScript Export (Tracing)
 
-We provide a tracing-based exporter that saves the end-to-end Fixer model as TorchScript (`fixer.ts`). This is useful for deployment where Python/Cosmos code is unavailable.
+We provide a minimal tracing exporter that saves the end-to-end Fixer model as a single TorchScript file. The timestep is fixed at export time.
 
 1) Run inside the Cosmos container (same as inference/training) and ensure the pretrained checkpoint is available.
 
@@ -143,14 +143,16 @@ We provide a tracing-based exporter that saves the end-to-end Fixer model as Tor
 ```bash
 python tools/export_torchscript.py \
   --model /work/models/pretrained/pretrained_fixer.pkl \
-  --outdir /work/output/ts \
+  --out /work/output/fixer.pt \
   --timestep 250 \
-  --height 1024 --width 576
+  --height 1024 --width 576 \
+  --vae-skip-connection
 ```
 
 Notes:
-- The exporter traces the model with batch size 1 at the specified resolution in FP32 for maximum stability. Use the same shape in deployment for best compatibility. (Dynamic shapes can be explored later.)
-- Exporting a standalone `denoise.ts` is not included because the Cosmos pipeline requires a rich `condition` object. The end-to-end artifact already contains the denoiser.
+- Traces batch size 1 at the given resolution in FP32 for stability. Use the same shape at inference for best compatibility.
+- The traced graph bakes in the chosen `--timestep` and `--vae-skip-connection` setting.
+- Output is a single file specified by `--out` (no separate name/outdir args).
 
 ## Citation
 
