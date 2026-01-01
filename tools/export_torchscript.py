@@ -53,19 +53,20 @@ def main():
         vae_skip_connection=args.vae_skip_connection,
         batch_size=1,
     )
+    # Ensure model weights and buffers prefer BF16 on target device
+    model.to(device, dtype=torch.bfloat16)
+    # sigma_data is a plain attribute; move/cast explicitly
+    model.sigma_data = torch.as_tensor(model.sigma_data, device=device, dtype=torch.bfloat16)
     model.set_eval()
-    # Stabilize tracing by forcing FP32 path inside forward
-    try:
-        setattr(model, "force_fp32_for_export", True)
-    except Exception:
-        pass
 
-    # Dummy input (FP32) on the chosen device
-    x = torch.randn(1, 3, args.height, args.width, device=device, dtype=torch.float32)
+    # Dummy input (BF16) on the chosen device
+    x = torch.randn(1, 3, args.height, args.width, device=device, dtype=torch.bfloat16)
 
     # Light warmup and trace
     model.eval()
-    with torch.no_grad():
+    use_cuda = (device.type == "cuda")
+    autocast_ctx = torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_cuda)
+    with torch.no_grad(), autocast_ctx:
         for _ in range(max(0, args.warmup_iters)):
             model(x)
         traced = torch.jit.trace(model, x, strict=False)
@@ -76,4 +77,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
