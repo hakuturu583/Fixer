@@ -233,6 +233,8 @@ class Pix2Pix_Turbo(torch.nn.Module):
         self.vae_skip_connection = vae_skip_connection    
         
         self.use_sched = use_sched
+        # Internal flag to enforce FP32 path for exporter/tracing
+        self.force_fp32_for_export = False
         if self.use_sched:
             self.sched = None #make_1step_sched()
          
@@ -291,6 +293,14 @@ class Pix2Pix_Turbo(torch.nn.Module):
         self.condition = uncondition
 
         self.unet = model#.net # MiniTrainDIT
+        # Prefer FP32 precision in the pipeline when exporting/tracing
+        try:
+            if hasattr(self.unet, "precision"):
+                self.unet.precision = torch.float32
+            if hasattr(self.unet, "dit") and hasattr(self.unet.dit, "precision"):
+                self.unet.dit.precision = torch.float32
+        except Exception:
+            pass
         vae = model.tokenizer #model.tokenizer <projects.cosmos.diffusion.v2.tokenizers.wan2pt1.Wan2pt1VAEInterface object at 0x155401d12c20>
         
         
@@ -358,9 +368,22 @@ class Pix2Pix_Turbo(torch.nn.Module):
         
         sigma_B_T = self.timesteps.to(dtype=unet_input.dtype) / 1000
         
-        model_pred = self.unet.denoise(xt_B_C_T_H_W = unet_input, 
-                               sigma = sigma_B_T,
-                               condition = self.condition ).x0
+        if getattr(self, "force_fp32_for_export", False):
+            unet_input = unet_input.to(dtype=torch.float32)
+            sigma_B_T = sigma_B_T.to(dtype=torch.float32)
+            # disable any potential autocast within this scope
+            with torch.autocast(device_type="cuda", dtype=torch.float32, enabled=False):
+                model_pred = self.unet.denoise(
+                    xt_B_C_T_H_W=unet_input,
+                    sigma=sigma_B_T,
+                    condition=self.condition,
+                ).x0
+        else:
+            model_pred = self.unet.denoise(
+                xt_B_C_T_H_W=unet_input,
+                sigma=sigma_B_T,
+                condition=self.condition,
+            ).x0
        
         z_denoised = model_pred
         

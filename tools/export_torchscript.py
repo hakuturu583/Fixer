@@ -116,6 +116,11 @@ def main():
 
     # 1) Build core model (loads UNet, VAE, condition, etc.)
     core = build_core(args.model, args.timestep, args.vae_skip_connection, device, dtype)
+    # Enforce FP32 execution path inside forward for tracing
+    try:
+        core.force_fp32_for_export = True
+    except Exception:
+        pass
 
     # 2) End-to-end export (Fixer) — always export
     fixer_wrap = _FixerForward(core)
