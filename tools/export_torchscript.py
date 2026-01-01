@@ -1,8 +1,16 @@
 import os
+import sys
 import argparse
+from pathlib import Path
 
 import torch
 from torch import nn
+
+# Ensure we can import from src/ when running this script from tools/
+_ROOT = Path(__file__).resolve().parents[1]
+_SRC = _ROOT / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 from pix2pix_turbo_nocond_cosmos_base_faster_tokenizer import Pix2Pix_Turbo
 
@@ -64,6 +72,14 @@ def build_core(pretrained_path: str, timestep: int, vae_skip_connection: bool,
     )
     core.set_eval()
     core.to(device=device, dtype=dtype)
+    # Align Cosmos tokenizer's internal dtype attribute (used to cast inputs)
+    try:
+        # Some Cosmos components store a `dtype` attribute (not the torch.nn.Module property)
+        # that they use to cast runtime tensors. Keep it in sync with parameter dtype.
+        if hasattr(core.vae, "dtype"):
+            setattr(core.vae, "dtype", dtype)
+    except Exception:
+        pass
     return core
 
 

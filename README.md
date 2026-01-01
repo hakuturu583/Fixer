@@ -146,11 +146,11 @@ python tools/export_torchscript.py \
   --outdir /work/output/ts \
   --timestep 250 \
   --height 1024 --width 576 \
-  --dtype fp16
+  --dtype bf16
 ```
 
 Notes:
-- The exporter traces the model with batch size 1 at the specified resolution and dtype. Use the same shape in deployment for best compatibility. (Dynamic shapes can be explored later.)
+- The exporter traces the model with batch size 1 at the specified resolution and dtype. Use the same shape in deployment for best compatibility. (Dynamic shapes can be explored later.) Prefer `--dtype bf16` to match Cosmos defaults.
 - Exporting a standalone `denoise.ts` is not included because the Cosmos pipeline requires a rich `condition` object. The end-to-end artifact already contains the denoiser.
 
 ## Citation
