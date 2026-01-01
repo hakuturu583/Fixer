@@ -65,14 +65,15 @@ def build_core(pretrained_path: str, timestep: int, vae_skip_connection: bool,
     core.set_eval()
     # Keep UNet in FP32 for stable tracing
     core.unet.to(device=device, dtype=dtype)
-    # Ensure pipeline does not auto-cast to BF16 inside UNet
-    try:
-        if hasattr(core.unet, "precision"):
-            core.unet.precision = torch.float32
-        if hasattr(core.unet, "dit") and hasattr(core.unet.dit, "precision"):
-            core.unet.dit.precision = torch.float32
-    except Exception:
-        pass
+    # Ensure pipeline modules do not cast to BF16 by overriding any `precision` attributes
+    def _force_precision_fp32(mod: torch.nn.Module):
+        for m in mod.modules():
+            if hasattr(m, "precision"):
+                try:
+                    setattr(m, "precision", torch.float32)
+                except Exception:
+                    pass
+    _force_precision_fp32(core.unet)
     # Move VAE to device and cast to BF16 to match Cosmos tokenizer expectations
     core.vae.to(device=device, dtype=torch.bfloat16)
     # Ensure the tokenizer's `dtype` attribute is BF16 so it casts inputs consistently
