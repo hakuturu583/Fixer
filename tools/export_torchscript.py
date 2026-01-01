@@ -46,6 +46,13 @@ def main():
 
     device = select_device(args.device)
 
+    # Monkey patch torch.utils.checkpoint to disable reentrant behavior
+    # See also https://x.com/hpp_ricecake/status/1719561043142406587
+    original_checkpoint = torch.utils.checkpoint
+    def checkpoint(*args, use_reentrant=False,**kwargs):
+        return original_checkpoint(*args, use_reentrant=False, **kwargs)
+    torch.utils.checkpoint = checkpoint
+
     # Build core model with fixed settings; batch_size is 1 for tracing
     model = Pix2Pix_Turbo(
         pretrained_path=args.model,
