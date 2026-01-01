@@ -63,16 +63,18 @@ def build_core(pretrained_path: str, timestep: int, vae_skip_connection: bool,
         batch_size=1,
     )
     core.set_eval()
-    core.to(device=device, dtype=dtype)
-    # Align Cosmos tokenizer's internal dtype attribute (used to cast inputs)
+    # Keep UNet in FP32 for stable tracing
+    core.unet.to(device=device, dtype=dtype)
+    # Move VAE to device but preserve its native dtype (often BF16 inside Cosmos)
+    core.vae.to(device=device)
+    # Make sure the tokenizer's `dtype` attribute matches its parameter dtype
     try:
-        # Some Cosmos components store a `dtype` attribute (not the torch.nn.Module property)
-        # that they use to cast runtime tensors. Keep it in sync with parameter dtype.
+        vae_param = next(core.vae.parameters())
         if hasattr(core.vae, "dtype"):
-            setattr(core.vae, "dtype", dtype)
-    except Exception:
+            setattr(core.vae, "dtype", vae_param.dtype)
+    except StopIteration:
         pass
-    # Ensure sigma_data uses the same dtype/device as the VAE/UNet to avoid upcasting
+    # Ensure sigma_data uses FP32 on the correct device to upcast latents for UNet
     try:
         core.sigma_data = torch.as_tensor(core.sigma_data, dtype=dtype, device=device)
     except Exception:
