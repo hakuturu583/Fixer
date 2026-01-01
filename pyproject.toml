@@ -1,0 +1,39 @@
+[project]
+name = "fixer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Linux: CUDA 12.4 wheels from PyTorch index
+    "torch==2.6.0+cu124; sys_platform == 'linux'",
+    "torchvision==0.21.0+cu124; sys_platform == 'linux'",
+    # macOS: default CPU wheels
+    "torch==2.6.0; sys_platform == 'darwin'",
+    "torchvision==0.21.0; sys_platform == 'darwin'",
+    "cosmos-predict2==1.0.9",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+torchvision = [
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[tool.uv.extra-build-variables]
+# Avoid ccache and use system compilers; set writable temp dirs
+
+[tool.uv.extra-build-variables.tensorstore]
+CCACHE_DISABLE = "1"
+CC = "/usr/bin/gcc"
+CXX = "/usr/bin/g++"
+TMPDIR = ".uv-build-tmp"
+CCACHE_TEMPDIR = ".uv-build-tmp/ccache-tmp"
