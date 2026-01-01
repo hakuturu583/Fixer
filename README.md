@@ -132,6 +132,27 @@ accelerate launch --mixed_precision=bf16 --main_process_port 29501 --multi_gpu -
 
 Include the flag ```--pretrained_path /path/to/pretrained_fixer.pkl``` to initialize training from the pretrained Fixer checkpoint; when omitted, the model will be finetuned directly from the raw Cosmos 0.6B image model.
 
+## TorchScript Export (Tracing)
+
+We provide a tracing-based exporter that saves the end-to-end Fixer model as TorchScript (`fixer.ts`). This is useful for deployment where Python/Cosmos code is unavailable.
+
+1) Run inside the Cosmos container (same as inference/training) and ensure the pretrained checkpoint is available.
+
+2) Export example:
+
+```bash
+python tools/export_torchscript.py \
+  --model /work/models/pretrained/pretrained_fixer.pkl \
+  --outdir /work/output/ts \
+  --timestep 250 \
+  --height 1024 --width 576 \
+  --dtype fp16
+```
+
+Notes:
+- The exporter traces the model with batch size 1 at the specified resolution and dtype. Use the same shape in deployment for best compatibility. (Dynamic shapes can be explored later.)
+- Exporting a standalone `denoise.ts` is not included because the Cosmos pipeline requires a rich `condition` object. The end-to-end artifact already contains the denoiser.
+
 ## Citation
 
 ```bibtex
