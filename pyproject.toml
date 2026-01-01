@@ -21,6 +21,7 @@ dependencies = [
     "tqdm>=4.66.0",
     "imageio>=2.34.0",
     "numpy>=1.26.0",
+    "transformer-engine[core-cu12]>=2.10.0",
 ]
 
 [[tool.uv.index]]
