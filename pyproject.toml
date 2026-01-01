@@ -12,6 +12,10 @@ dependencies = [
     "torch==2.6.0; sys_platform == 'darwin'",
     "torchvision==0.21.0; sys_platform == 'darwin'",
     "cosmos-predict2==1.0.9",
+    "clip",
+    "lpips>=0.1.4",
+    "vision-aided-loss>=0.1.0",
+    "natsort>=8.4.0",
 ]
 
 [[tool.uv.index]]
@@ -27,6 +31,7 @@ torch = [
 torchvision = [
   { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
+clip = { git = "https://github.com/openai/CLIP.git" }
 
 [tool.uv.extra-build-variables]
 # Avoid ccache and use system compilers; set writable temp dirs
