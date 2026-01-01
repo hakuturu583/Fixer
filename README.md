@@ -132,28 +132,6 @@ accelerate launch --mixed_precision=bf16 --main_process_port 29501 --multi_gpu -
 
 Include the flag ```--pretrained_path /path/to/pretrained_fixer.pkl``` to initialize training from the pretrained Fixer checkpoint; when omitted, the model will be finetuned directly from the raw Cosmos 0.6B image model.
 
-## TorchScript Export (Tracing)
-
-We provide a minimal tracing exporter that saves the end-to-end Fixer model as a single TorchScript file. The timestep is fixed at export time.
-
-1) Run inside the Cosmos container (same as inference/training) and ensure the pretrained checkpoint is available.
-
-2) Export example:
-
-```bash
-python tools/export_torchscript.py \
-  --model /work/models/pretrained/pretrained_fixer.pkl \
-  --out /work/output/fixer.pt \
-  --timestep 250 \
-  --height 1024 --width 576 \
-  --vae-skip-connection
-```
-
-Notes:
-- Traces batch size 1 at the given resolution in FP32 for stability. Use the same shape at inference for best compatibility.
-- The traced graph bakes in the chosen `--timestep` and `--vae-skip-connection` setting.
-- Output is a single file specified by `--out` (no separate name/outdir args).
-
 ## Citation
 
 ```bibtex
