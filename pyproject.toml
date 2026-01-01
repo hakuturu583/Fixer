@@ -16,6 +16,11 @@ dependencies = [
     "lpips>=0.1.4",
     "vision-aided-loss>=0.1.0",
     "natsort>=8.4.0",
+    # Runtime deps used by inference_pretrained_model.py
+    "pillow>=10.0.0",
+    "tqdm>=4.66.0",
+    "imageio>=2.34.0",
+    "numpy>=1.26.0",
 ]
 
 [[tool.uv.index]]
@@ -34,7 +39,7 @@ torchvision = [
 clip = { git = "https://github.com/openai/CLIP.git" }
 
 [tool.uv.extra-build-variables]
-# Avoid ccache and use system compilers; set writable temp dirs
+# Reserved for per-package build variables
 
 [tool.uv.extra-build-variables.tensorstore]
 CCACHE_DISABLE = "1"

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -22,7 +23,10 @@ import time
 
 import torch
 import argparse
-import transformer_engine as te #important
+try:
+    import transformer_engine as te  # optional
+except Exception:
+    te = None
 from glob import glob
 import os
 import argparse
